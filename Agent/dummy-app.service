@@ -1,0 +1,30 @@
+[Unit]
+Description=Dummy Application
+After=network.target vault-agent.service
+Requires=vault-agent.service
+
+[Service]
+Type=simple
+User=vault-agent
+Group=vault-agent
+WorkingDirectory=/opt
+ExecStart=/usr/bin/python3 /opt/dummy-app.py
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+Environment=SECRETS_FILE=/opt/vault-agent/secrets/secret.json
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/vault-agent/secrets
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=dummy-app
+
+[Install]
+WantedBy=multi-user.target

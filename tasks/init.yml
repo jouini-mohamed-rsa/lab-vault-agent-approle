@@ -1,0 +1,44 @@
+version: '3'
+
+tasks:
+  clean:
+    desc: Clean up existing VMs and generated files
+    cmds:
+      - bash -c "source ./scripts/common.sh && cleanup_vms"
+    silent: true
+
+  create-vms:
+    desc: Create Multipass VMs
+    cmds:
+      - ./scripts/init.sh vms
+    silent: true
+
+  get-ips:
+    desc: Get VM IP addresses
+    cmds:
+      - ./scripts/init.sh ips
+    silent: true
+
+  generate-certs:
+    desc: Generate TLS certificates
+    cmds:
+      - ./scripts/init.sh certs
+    silent: true
+
+  distribute-ca:
+    desc: Distribute CA certificates
+    cmds:
+      - ./scripts/init.sh ca
+    silent: true
+
+  setup-ssh:
+    desc: Setup SSH connectivity
+    cmds:
+      - ./scripts/init.sh ssh
+    silent: true
+
+  all:
+    desc: Complete infrastructure initialization
+    cmds:
+      - ./scripts/init.sh all
+    silent: true

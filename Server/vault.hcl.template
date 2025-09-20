@@ -1,0 +1,18 @@
+ui = true
+disable_mlock = true
+
+storage "raft" {
+  path = "/opt/vault/data"
+  node_id = "vault-1"
+}
+
+listener "tcp" {
+  address = "0.0.0.0:8200"
+  tls_cert_file = "/opt/vault/certs/vault-cert.pem"
+  tls_key_file = "/opt/vault/certs/vault-key.pem"
+  tls_client_ca_file = "/opt/vault/certs/ca-cert.pem"
+}
+
+cluster_addr = "https://{{VAULT_IP}}:8201"
+api_addr = "https://{{VAULT_IP}}:8200"
+log_level = "INFO"

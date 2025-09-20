@@ -1,0 +1,10 @@
+---
+# Lab environment configuration
+ttl_threshold_seconds: 300   # 5 minutes for lab (shorter for demo)
+uses_threshold: 2
+secret_id_ttl: "1h"
+secret_id_num_uses: 5
+
+# Vault configuration (will be updated with actual IP)
+vault_server_url: "https://{{VAULT_IP}}:8200"
+environment: "lab"

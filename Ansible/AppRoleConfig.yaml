@@ -1,0 +1,57 @@
+---
+- name: "Configure AppRole in Vault"
+  hosts: localhost
+  gather_facts: no
+  vars_files:
+    - lab-vars.yml
+
+  tasks:
+    - name: "Create application policy"
+      community.hashi_vault.vault_write:
+        url: "{{ vault_url }}"
+        auth_method: token
+        token: "{{ vault_admin_token }}"
+        path: "sys/policies/acl/{{ app_name }}-policy"
+        data:
+          policy: |        
+            # KV v2 secrets
+            path "kv/data/{{ app_name }}/*" {
+              capabilities = ["read"]
+            }    
+            # Allow token renewal
+            path "auth/token/renew-self" {
+              capabilities = ["update"]
+            }
+            # Allow token lookup for validation
+            path "auth/token/lookup-self" {
+              capabilities = ["read"]
+            }
+      register: policy_result
+
+    - name: "Display result - Policy created"
+      debug:
+        msg: "✅ Application policy '{{ app_name }}-policy' has been created successfully"
+      when: 
+        - policy_result is defined
+        - policy_result.changed
+
+    - name: "Configure AppRole"
+      community.hashi_vault.vault_write:
+        url: "{{ vault_url }}"
+        auth_method: token
+        token: "{{ vault_admin_token }}"
+        path: "auth/approle/role/{{ app_name }}"
+        data:
+          token_policies: "{{ app_name }}-policy"
+          token_ttl: "{{ token_ttl }}"
+          token_max_ttl: "{{ token_max_ttl }}"
+          secret_id_ttl: "{{ secret_id_ttl }}"
+          secret_id_num_uses: 1
+      register: approle_config_result
+
+    - name: "Display result - AppRole configured"
+      debug:
+        msg: "✅ AppRole '{{ app_name }}' has been configured successfully"
+      when: 
+        - approle_config_result is defined
+        - approle_config_result.changed

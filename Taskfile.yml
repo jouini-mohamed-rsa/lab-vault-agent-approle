@@ -1,0 +1,250 @@
+version: '3'
+
+includes:
+  init: ./tasks/init.yml
+  server: ./tasks/server.yml
+  ansible: ./tasks/ansible.yml
+  agent: ./tasks/agent.yml
+
+vars:
+  ANSIBLE_VM: vault-ansible
+  VAULT_VM: vault-server
+  AGENT_VM: vault-agent
+
+tasks:
+  default:
+    desc: Show available tasks
+    cmds:
+      - task --list-all
+
+  # Main workflow tasks
+  infrastructure:
+    desc: Initialize infrastructure (VMs, certs, networking)
+    cmds:
+      - task: init:all
+    silent: true
+
+  clean-setup:
+    desc: Clean setup - remove existing VMs and create fresh environment
+    cmds:
+      - task: clean
+      - task: infrastructure
+    silent: true
+
+  vault-server:
+    desc: Setup Vault server (requires infrastructure)
+    cmds:
+      - |
+        if [[ ! -f "generated/vm-ips.env" ]]; then
+          echo "[ERROR] Infrastructure not ready. Run 'task infrastructure' first."
+          exit 1
+        fi
+      - task: server:all
+    silent: true
+
+  vault-ansible:
+    desc: Setup Ansible with AppRole authentication (requires vault-server)
+    cmds:
+      - |
+        if [[ ! -f "root-token.txt" ]]; then
+          echo "[ERROR] Vault server not ready. Run 'task vault-server' first."
+          exit 1
+        fi
+      - task: ansible:all
+    silent: true
+
+  vault-agent:
+    desc: Setup Vault agent (requires vault-ansible)
+    cmds:
+      - |
+        if [[ ! -f "generated/ansible-auth/role-id" ]]; then
+          echo "[ERROR] Ansible not ready. Run 'task vault-ansible' first."
+          exit 1
+        fi
+      - task: agent:all
+    silent: true
+
+  secrets:
+    desc: Create demo secrets and agent policy (based on Agent/secret.tmpl)
+    cmds:
+      - |
+        if [[ ! -f "root-token.txt" ]]; then
+          echo "[ERROR] Vault server not ready. Run 'task vault-server' first."
+          exit 1
+        fi
+      - ./scripts/secrets.sh all
+    silent: true
+
+  create-secrets:
+    desc: Create only the KV secrets
+    cmds:
+      - ./scripts/secrets.sh create
+    silent: true
+
+  agent-policy:
+    desc: Create policy for Vault agent
+    cmds:
+      - ./scripts/secrets.sh policy
+    silent: true
+
+  verify-secrets:
+    desc: Verify created secrets
+    cmds:
+      - ./scripts/secrets.sh verify
+
+  # Troubleshooting tasks
+  troubleshoot:
+    desc: Run comprehensive health check
+    cmds:
+      - ./scripts/troubleshoot.sh health
+
+  check-ttl:
+    desc: Check token and Secret ID TTLs
+    cmds:
+      - ./scripts/troubleshoot.sh ttl
+
+  check-secret-id:
+    desc: Check Secret ID status and validation
+    cmds:
+      - ./scripts/troubleshoot.sh secret-id
+
+  check-agent:
+    desc: Check Vault Agent status and authentication
+    cmds:
+      - ./scripts/troubleshoot.sh agent
+
+  check-kv:
+    desc: Check KV secrets and versions
+    cmds:
+      - ./scripts/troubleshoot.sh kv
+
+  # Ansible Playbook Tasks
+  ansible-vars:
+    desc: Prepare Ansible variables for playbooks
+    cmds:
+      - ./scripts/ansible-playbooks.sh vars
+    silent: true
+
+  run-playbook:
+    desc: "Run specific Ansible playbook (usage: task run-playbook PLAYBOOK=AppRoleConfig.yaml)"
+    cmds:
+      - |
+        if [[ -z "{{.PLAYBOOK}}" ]]; then
+          echo "Usage: task run-playbook PLAYBOOK=<playbook.yaml>"
+          echo "Available playbooks:"
+          ls Ansible/*.yaml 2>/dev/null | xargs -n1 basename
+          exit 1
+        fi
+      - ./scripts/ansible-playbooks.sh run {{.PLAYBOOK}}
+
+  ansible-approle:
+    desc: Run AppRole configuration playbook
+    cmds:
+      - ./scripts/ansible-playbooks.sh approle
+
+  ansible-role-id:
+    desc: Run Role ID distribution playbook
+    cmds:
+      - ./scripts/ansible-playbooks.sh role-id
+
+  ansible-secret-id:
+    desc: Run Secret ID generation playbook
+    cmds:
+      - ./scripts/ansible-playbooks.sh secret-id
+
+  ansible-all:
+    desc: Run all Ansible playbooks
+    cmds:
+      - ./scripts/ansible-playbooks.sh all
+
+  ansible-monitor:
+    desc: Run Secret ID monitoring (check and regenerate if needed)
+    cmds:
+      - ./scripts/ansible-playbooks.sh run SecretIDMonitor.yaml
+
+  # Convenience tasks
+  full-setup:
+    desc: Complete lab setup (all components)
+    cmds:
+      - task: infrastructure
+      - task: vault-server
+      - task: vault-ansible
+      - task: secrets
+      - task: vault-agent
+      - task: status
+      - echo "[lab] Complete lab setup finished!"
+    silent: true
+
+  quick-setup:
+    desc: Quick infrastructure setup (no cloud-init)
+    cmds:
+      - bash -c "source ./scripts/common.sh && cleanup_vms"
+      - echo "[lab] Creating basic VMs..."
+      - |
+        for vm in {{.ANSIBLE_VM}} {{.VAULT_VM}} {{.AGENT_VM}}; do
+          if ! multipass list | grep -q "^$vm"; then
+            multipass launch 22.04 --name $vm --cpus 2 --memory 2G --disk 10G --timeout 300 >/dev/null 2>&1
+          fi
+        done
+      - task: init:get-ips
+      - task: init:generate-certs
+      - echo "[lab] Basic infrastructure ready"
+    silent: true
+
+  # Utility tasks
+  clean:
+    desc: Clean up VMs and generated files
+    cmds:
+      - bash -c "source ./scripts/common.sh && cleanup_vms"
+    silent: true
+
+  status:
+    desc: Show lab environment status
+    cmds:
+      - ./scripts/utils.sh status
+
+  debug:
+    desc: Debug VM status and connectivity
+    cmds:
+      - ./scripts/utils.sh debug
+
+  setup-vault-env:
+    desc: Configure VAULT environment variables on all VMs
+    cmds:
+      - ./scripts/init.sh vault-env
+
+  recover:
+    desc: Recover VMs in unknown state
+    cmds:
+      - ./scripts/utils.sh recover
+    silent: true
+
+  # SSH access
+  ssh-ansible:
+    desc: SSH into Ansible VM
+    cmds:
+      - multipass shell {{.ANSIBLE_VM}}
+
+  ssh-server:
+    desc: SSH into Vault server VM
+    cmds:
+      - multipass shell {{.VAULT_VM}}
+
+  ssh-agent:
+    desc: SSH into Vault agent VM
+    cmds:
+      - multipass shell {{.AGENT_VM}}
+
+  # Restart specific VM
+  restart:
+    desc: "Restart a VM (usage: task restart VM=vault-server)"
+    cmds:
+      - |
+        if [[ -z "{{.VM}}" ]]; then
+          echo "Usage: task restart VM=<vm-name>"
+          echo "Available VMs: {{.ANSIBLE_VM}}, {{.VAULT_VM}}, {{.AGENT_VM}}"
+          exit 1
+        fi
+        echo "[lab] Restarting {{.VM}}..."
+        multipass restart {{.VM}}
+    silent: true

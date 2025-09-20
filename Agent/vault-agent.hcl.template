@@ -1,0 +1,56 @@
+# Vault Agent Configuration Template
+
+# Vault server connection
+vault {
+  address = "https://{{VAULT_IP}}:8200"
+  ca_cert = "/opt/vault/certs/ca-cert.pem"
+  retry {
+    num_retries = 5
+  }
+}
+
+# Auto-auth configuration using AppRole
+auto_auth {
+  method "approle" {
+    mount_path = "auth/approle"
+    config = {
+      role_id_file_path   = "/opt/vault-agent/role-id"
+      secret_id_file_path = "/opt/vault-agent/secret-id"
+      remove_secret_id_file_after_reading = false
+    }
+  }
+
+  sink "file" {
+    config = {
+      path = "/opt/vault-agent/token"
+      mode = 0600
+    }
+  }
+}
+
+# API proxy configuration
+api_proxy {
+  use_auto_auth_token = true
+}
+
+# Listener for applications
+listener "tcp" {
+  address = "{{AGENT_IP}}:8100"
+  tls_disable = true
+}
+
+# Cache configuration
+cache {
+}
+
+# Template configuration for secrets
+template {
+  source      = "/opt/vault-agent/templates/secret.tmpl"
+  destination = "/opt/vault-agent/secrets/secret.json"
+  perms       = 0600
+  command     = "systemctl reload dummy-app || true"
+}
+
+# Logging
+log_level = "info"
+log_file = "/opt/vault-agent/logs/vault-agent.log"

@@ -1,0 +1,24 @@
+#cloud-config
+packages:
+  - curl
+  - unzip
+  - jq
+
+runcmd:
+  - |
+    ARCH=$(uname -m)
+    if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
+      VAULT_ARCH="arm64"
+    else
+      VAULT_ARCH="amd64"
+    fi
+    curl -fsSL https://releases.hashicorp.com/vault/1.15.4/vault_1.15.4_linux_${VAULT_ARCH}.zip -o /tmp/vault.zip
+  - unzip /tmp/vault.zip -d /tmp
+  - sudo mv /tmp/vault /usr/local/bin/
+  - rm /tmp/vault.zip
+  - sudo useradd --system --home /opt/vault --shell /bin/bash vault
+  - sudo mkdir -p /opt/vault/config
+  - sudo mkdir -p /opt/vault/data
+  - sudo mkdir -p /opt/vault/certs
+  - sudo mkdir -p /opt/vault/logs
+  - sudo chown -R vault:vault /opt/vault

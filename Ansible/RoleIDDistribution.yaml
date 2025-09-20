@@ -1,0 +1,47 @@
+---
+- name: "Retrieve and deploy Role ID to Vault Agent hosts"
+  hosts: localhost
+  gather_facts: no
+  vars_files:
+    - lab-vars.yml
+
+  tasks:
+    - name: "Get Role ID from Vault"
+      community.hashi_vault.vault_read:
+        url: "{{ vault_url }}"
+        auth_method: token
+        token: "{{ vault_admin_token }}"
+        path: "auth/approle/role/{{ app_name }}/role-id"
+      register: role_id_result
+
+    - name: "Display Role ID (for verification)"
+      debug:
+        msg: "Role ID: {{ role_id_result.data.data.role_id }}"
+
+- name: "Deploy Role ID to Vault Agent hosts"
+  hosts: vault_agents
+  become: yes
+  gather_facts: no
+  vars:
+    app_name: "{{ app_name | default('myapp') }}"
+
+  tasks:
+    - name: "Create Vault Agent auth directory"
+      file:
+        path: "/opt/vault-agent/auth"
+        state: directory
+        mode: '0755'
+        owner: vault-agent
+        group: vault-agent
+
+    - name: "Deploy Role ID to agent host"
+      copy:
+        content: "{{ hostvars['localhost']['role_id_result']['data']['data']['role_id'] }}"
+        dest: "/opt/vault-agent/role-id"
+        mode: '0600'
+        owner: vault-agent
+        group: vault-agent
+
+    - name: "Display result - Role ID deployed"
+      debug:
+        msg: "✅ Role ID has been deployed to {{ inventory_hostname }}"

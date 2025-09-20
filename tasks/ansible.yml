@@ -1,0 +1,20 @@
+version: '3'
+
+tasks:
+  auth:
+    desc: Setup Ansible AppRole authentication
+    cmds:
+      - ./scripts/ansible.sh auth
+    silent: true
+
+  inventory:
+    desc: Create Ansible inventory
+    cmds:
+      - ./scripts/ansible.sh inventory
+    silent: true
+
+  all:
+    desc: Complete Ansible setup
+    cmds:
+      - ./scripts/ansible.sh all
+    silent: true

@@ -1,0 +1,38 @@
+# Lab Environment Variables for Ansible Playbooks
+---
+# Vault Configuration (will be templated)
+vault_url: "https://{{VAULT_IP}}:8200"
+vault_admin_token: "{{ROOT_TOKEN}}"
+
+# Application Configuration
+app_name: "dummy-app"
+token_ttl: "30m"
+token_max_ttl: "2h"
+secret_id_ttl: "5h"
+wrap_ttl: "5m"
+
+# Lab-specific settings
+vault_cacert_path: "/opt/vault/certs/ca-cert.pem"
+agent_config_path: "/opt/vault-agent"
+agent_user: "vault-agent"
+agent_group: "vault-agent"
+
+# KV Engine settings
+kv_engine: "kv"
+kv_version: 2
+
+# Demo secrets for dummy application
+demo_secrets:
+  database:
+    username: "demo_user"
+    password: "demo_password123"
+    host: "localhost"
+    port: 5432
+  api:
+    key: "demo_api_key_12345"
+    secret: "demo_api_secret_67890"
+
+# Secret ID Monitoring Configuration
+monitor_interval: "30m"
+secret_id_renewal_threshold: 300  # seconds
+max_uses_threshold: 0

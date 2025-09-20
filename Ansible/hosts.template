@@ -1,0 +1,10 @@
+[vault_agents]
+{{AGENT_VM}} ansible_host={{AGENT_IP}} ansible_user=ubuntu app_name=myapp
+
+[vault_agents:vars]
+vault_server_url=https://{{VAULT_IP}}:8200
+environment=lab
+secret_id_ttl=1h
+secret_id_num_uses=5
+ttl_threshold_seconds=300
+uses_threshold=2
