@@ -48,7 +48,6 @@ template {
   source      = "/opt/vault-agent/templates/secret.tmpl"
   destination = "/opt/vault-agent/secrets/secret.json"
   perms       = 0600
-  command     = "systemctl reload dummy-app || true"
 }
 
 # Logging

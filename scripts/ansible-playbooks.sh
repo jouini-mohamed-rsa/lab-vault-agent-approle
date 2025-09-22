@@ -81,6 +81,50 @@ case "${1:-help}" in
         prepare_ansible_vars
         run_playbook "SecretIDMonitor.yaml"
         ;;
+    "install-monitor-cron")
+        prepare_ansible_vars
+        log "Installing SecretIDMonitor cron on Ansible VM (every 20 minutes)..."
+        source generated/vm-ips.env
+        multipass exec $ANSIBLE_VM -- bash -c '
+            set -euo pipefail
+            cd /home/ubuntu/ansible
+            
+            # Ensure env file exists for Vault context when playbook runs
+            if [[ -f .ansible.env ]]; then
+              ENV_SOURCE="source /home/ubuntu/ansible/.ansible.env && "
+            else
+              ENV_SOURCE=""
+            fi
+            
+            # Create a temporary cron file to avoid shell escaping issues
+            TEMP_CRON="/tmp/new_crontab.txt"
+            
+            # Get existing crontab (if any)
+            crontab -l 2>/dev/null > "$TEMP_CRON" || touch "$TEMP_CRON"
+            
+            # Create the cron job line
+            CRON_LINE="*/20 * * * * ${ENV_SOURCE}cd /home/ubuntu/ansible && ansible-playbook SecretIDMonitor.yaml >> /tmp/secret-id-monitor.log 2>&1"
+            
+            # Check if this cron job already exists
+            if ! grep -q "SecretIDMonitor.yaml" "$TEMP_CRON" 2>/dev/null; then
+                echo "$CRON_LINE" >> "$TEMP_CRON"
+            else
+                # Remove existing SecretIDMonitor lines and add the new one
+                grep -v "SecretIDMonitor.yaml" "$TEMP_CRON" > "${TEMP_CRON}.tmp" 2>/dev/null || touch "${TEMP_CRON}.tmp"
+                echo "$CRON_LINE" >> "${TEMP_CRON}.tmp"
+                mv "${TEMP_CRON}.tmp" "$TEMP_CRON"
+            fi
+            
+            # Install the new crontab
+            crontab "$TEMP_CRON"
+            
+            # Clean up
+            rm -f "$TEMP_CRON" "${TEMP_CRON}.tmp"
+            
+            # Verify installation
+            crontab -l | grep -q "SecretIDMonitor.yaml" || exit 1
+        '
+        ;;
     "all")
         prepare_ansible_vars
         run_playbook "AppRoleConfig.yaml"
@@ -88,7 +132,7 @@ case "${1:-help}" in
         run_playbook "SecretIDGen.yaml"
         ;;
     *)
-        echo "Usage: $0 [vars|run <playbook>|approle|secret-id|role-id|monitor|all]"
+        echo "Usage: $0 [vars|run <playbook>|approle|secret-id|role-id|monitor|install-monitor-cron|all]"
         echo ""
         echo "Available playbooks:"
         ls Ansible/*.yaml 2>/dev/null | xargs -n1 basename || echo "No playbooks found"

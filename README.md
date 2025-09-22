@@ -119,54 +119,43 @@ task status
 - **`task vault-agent`** - Setup Vault agent with auto-unwrapping
 
 ### Secret ID Management
-- **`task ansible-monitor`** - Run Secret ID monitoring (check and regenerate)
-- **`task ansible-secret-id`** - Generate new wrapped Secret ID
-- **`task ansible-role-id`** - Deploy Role ID to agent hosts
-- **`task ansible-all`** - Run all Ansible playbooks
+- Monitoring cron is installed automatically as part of `task vault-agent` (runs every 20 minutes on the Ansible VM)
 
 ### Utilities
 - **`task status`** - Show lab environment status
-- **`task debug-vms`** - Debug VM status and connectivity
 - **`task clean`** - Clean up VMs and generated files
-- **`task recover-vms`** - Recover VMs in unknown state
-- **`task quick-setup`** - Quick infrastructure setup (no cloud-init)
-- **`task verify-secrets`** - Test secret access and agent functionality
-- **`task setup-vault-env`** - Configure VAULT environment variables on all VMs
 
-### Troubleshooting Tasks
-- **`task troubleshoot`** - Run comprehensive health check
-- **`task check-ttl`** - Check token and Secret ID TTLs
-- **`task check-secret-id`** - Check Secret ID status and validation
-- **`task check-agent`** - Check Vault Agent status and authentication
-- **`task check-kv`** - Check KV secrets and versions
 
 ### SSH Access
-- **`task ssh-ansible`** - SSH into Ansible VM
-- **`task ssh-server`** - SSH into Vault server VM
-- **`task ssh-agent`** - SSH into Vault agent VM
+Use Multipass directly as needed, for example:
+```bash
+multipass shell vault-ansible
+```
 
 ### Granular Control
-All tasks support modular execution:
-```bash
-# Infrastructure components
-task init:create-vms
-task init:generate-certs
-task init:distribute-ca
+Modular tasks are available for fine-grained control:
 
-# Server components
-task server:setup
-task server:initialize
+**Infrastructure Tasks:**
+- `task init:all` - Complete infrastructure setup
+- `task init:create-vms` - Create VMs only
+- `task init:generate-certs` - Generate certificates only
+- `task init:setup-ssh` - Setup SSH connectivity only
 
-# Ansible components
-task ansible:auth
-task ansible:inventory
-task ansible:vars
+**Server Tasks:**
+- `task server:all` - Complete server setup
+- `task server:setup` - Setup Vault server configuration
+- `task server:initialize` - Initialize Vault only
 
-# Agent components
-task agent:setup
-task agent:configure
-task agent:credentials
-```
+**Ansible Tasks:**
+- `task ansible:all` - Complete Ansible setup
+- `task ansible:auth` - Setup AppRole authentication only
+- `task ansible:inventory` - Create inventory only
+
+**Agent Tasks:**
+- `task agent:all` - Complete agent setup
+- `task agent:setup` - Setup agent VM only
+- `task agent:configure` - Configure agent only
+- `task agent:credentials` - Setup credentials only
 
 ## Secret ID Monitoring System
 
@@ -174,11 +163,8 @@ task agent:credentials
 The lab includes a production-ready Secret ID monitoring system:
 
 ```bash
-# Run monitoring manually
-task ansible-monitor
-
-# Set up cron job (example)
-# */30 * * * * cd /path/to/lab && task ansible-monitor >/dev/null 2>&1
+# Run monitoring manually on Ansible VM if needed
+multipass exec vault-ansible -- bash -c 'cd /home/ubuntu/ansible && ansible-playbook SecretIDMonitor.yaml'
 ```
 
 ### Monitoring Features
@@ -205,7 +191,7 @@ After successful deployment:
 ### VMs Created
 - **vault-ansible** (192.168.2.x) - Ansible control node with monitoring
 - **vault-server** (192.168.2.x) - Vault server with KV secrets engine
-- **vault-agent** (192.168.2.x) - Vault agent with demo app and auto-unwrapping
+- **vault-agent** (192.168.2.x) - Vault agent with Vault Agent
 
 ### Vault Configuration
 - **UI**: https://vault-server-ip:8200
@@ -229,48 +215,35 @@ After successful deployment:
 - **Monitoring**: Integration with automated Secret ID monitoring
 
 ### Sample Application
-- **dummy-app**: Python application demonstrating secret consumption
-- **Service**: Systemd service with proper dependencies
-- **Logging**: Application logs to `/opt/vault-agent/logs/`
-- **Configuration**: Reads secrets from rendered JSON files
+The demo Python application and its service are no longer managed in this lab. The lab renders `/opt/vault-agent/secrets/secret.json` for applications to consume.
 
-## Troubleshooting
+## Basic Troubleshooting
 
 ### Common Issues
 ```bash
 # Check VM status and connectivity
-task debug-vms
+multipass list
+multipass info vault-server vault-ansible vault-agent
 
-# Recover failed VMs
-task recover-vms
+# Check overall lab status
+task status
 
-# Clean and restart
+# Clean and restart if needed
 task clean
 task full-setup
-
-# Test secret access
-task verify-secrets
 ```
 
 ### Quick Troubleshooting Commands
 ```bash
-# Comprehensive health check
-task troubleshoot
-
-# Check TTLs and expiration
-task check-ttl
-
-# Check Secret ID status
-task check-secret-id
-
-# Check agent authentication
-task check-agent
-
-# Check KV secrets
-task check-kv
+# Check overall lab status
+task status
 
 # Run Secret ID monitoring
-task ansible-monitor
+./scripts/ansible-playbooks.sh monitor
+
+# Check VM connectivity
+multipass list
+multipass info vault-server vault-ansible vault-agent
 ```
 
 ### TTL and Expiration Monitoring
@@ -381,7 +354,7 @@ multipass exec vault-agent -- bash -c '
 #### Run Comprehensive Secret ID Check
 ```bash
 # Run monitoring playbook
-task ansible-monitor
+./scripts/ansible-playbooks.sh monitor
 
 # Check monitoring logs
 multipass exec vault-ansible -- cat /tmp/secret-id-monitor.log
@@ -448,27 +421,18 @@ multipass exec vault-ansible -- /home/ubuntu/check-secret-health.sh
 ```
 
 #### Set Up Monitoring Cron Job
+Installed automatically during `task vault-agent`. To re-install or inspect:
 ```bash
-# On Ansible VM - set up automated monitoring
-multipass exec vault-ansible -- bash -c '
-    # Add cron job for Secret ID monitoring (every 30 minutes)
-    (crontab -l 2>/dev/null; echo "*/30 * * * * cd /home/ubuntu/ansible && ansible-playbook SecretIDMonitor.yaml >> /tmp/secret-id-monitor.log 2>&1") | crontab -
-    
-    # Add daily health check
-    (crontab -l 2>/dev/null; echo "0 9 * * * /home/ubuntu/check-secret-health.sh >> /tmp/health-check.log 2>&1") | crontab -
-    
-    echo "Monitoring cron jobs installed"
-    crontab -l
-'
+multipass exec vault-ansible -- crontab -l | sed -n '/SecretIDMonitor.yaml/p'
 ```
 
 ### Secret ID Issues
 ```bash
 # Check Secret ID status
-task ansible-monitor
+./scripts/ansible-playbooks.sh monitor
 
 # Force regeneration
-task ansible-secret-id
+./scripts/ansible-playbooks.sh secret-id
 
 # Check agent logs
 multipass exec vault-agent -- sudo journalctl -u vault-agent -f
@@ -519,19 +483,18 @@ task ansible:all
 task agent:all
 
 # Test monitoring system
-task ansible-monitor
+./scripts/ansible-playbooks.sh monitor
 
 # Full integration test
 task clean
 task full-setup
-task verify-secrets
 ```
 
 ### Adding New Monitoring Rules
 1. Edit `Ansible/SecretIDMonitor.yaml`
 2. Update monitoring logic in the `Determine if Secret ID regeneration is needed` task
 3. Adjust thresholds in `Ansible/lab-vars.yml`
-4. Test with `task ansible-monitor`
+4. Test with `./scripts/ansible-playbooks.sh monitor`
 
 ## Security Considerations
 

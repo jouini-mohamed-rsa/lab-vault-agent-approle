@@ -10,14 +10,7 @@ setup_agent_vm() {
     log "Setting up Vault agent VM..."
     source generated/vm-ips.env
     
-    # Transfer dummy app
-    multipass transfer apps/dummy-app.py $AGENT_VM:/tmp/ 2>/dev/null
-    multipass exec $AGENT_VM -- bash -c "
-        sudo mv /tmp/dummy-app.py /opt/dummy-app.py
-        sudo chmod +x /opt/dummy-app.py
-        sudo chown vault-agent:vault-agent /opt/dummy-app.py
-    " 2>/dev/null
-    
+    # Basic preparation only (no application deployment)
     log "Agent VM basic setup completed"
 }
 
@@ -44,7 +37,6 @@ configure_vault_agent() {
     multipass transfer generated/agent/vault-agent.service $AGENT_VM:/tmp/ 2>/dev/null
     multipass transfer generated/agent/unwrap-secret-id.sh $AGENT_VM:/tmp/ 2>/dev/null
     multipass transfer Agent/secret.tmpl $AGENT_VM:/tmp/ 2>/dev/null
-    multipass transfer Agent/dummy-app.service $AGENT_VM:/tmp/ 2>/dev/null
     
     # Configure agent
     multipass exec $AGENT_VM -- bash -c "
@@ -56,9 +48,8 @@ configure_vault_agent() {
         sudo mv /tmp/secret.tmpl /opt/vault-agent/templates/
         sudo mv /tmp/unwrap-secret-id.sh /opt/vault-agent/bin/
         
-        # Install service files
+        # Install service file
         sudo mv /tmp/vault-agent.service /etc/systemd/system/
-        sudo mv /tmp/dummy-app.service /etc/systemd/system/
         
         # Set proper permissions and ownership
         sudo chmod +x /opt/vault-agent/bin/unwrap-secret-id.sh
@@ -73,14 +64,32 @@ configure_vault_agent() {
         # Ensure vault-agent user can write to the directory
         sudo chmod 775 /opt/vault-agent
         
-        # Enable services
+        # Enable service (do not start yet; credentials may not be present)
         sudo systemctl daemon-reload
         sudo systemctl enable vault-agent
-        sudo systemctl start vault-agent
-        sudo systemctl enable dummy-app
     " 2>/dev/null
     
     log "Vault agent configured"
+}
+
+# Start or restart vault-agent service once credentials are present
+start_vault_agent_service() {
+    log "Starting vault-agent service..."
+    source generated/vm-ips.env
+    multipass exec $AGENT_VM -- bash -c '
+        set -e
+        sudo systemctl restart vault-agent || sudo systemctl start vault-agent
+        sudo systemctl is-active --quiet vault-agent && echo "vault-agent is active"
+    ' 2>/dev/null
+}
+
+# Install monitoring cron on Ansible VM (every 20 minutes)
+install_monitoring_cron() {
+    log "Installing SecretIDMonitor cron on Ansible VM (every 20 minutes)..."
+    # Reuse playbook helper to ensure variables and playbooks are present
+    ./scripts/ansible-playbooks.sh vars
+    ./scripts/ansible-playbooks.sh install-monitor-cron
+    log "SecretIDMonitor cron installed on Ansible VM"
 }
 
 # Main execution
@@ -98,6 +107,8 @@ case "${1:-all}" in
         setup_agent_vm
         configure_vault_agent
         ./scripts/agent-credentials.sh setup
+        start_vault_agent_service
+        install_monitoring_cron
         ;;
     *)
         echo "Usage: $0 [setup|configure|credentials|all]"

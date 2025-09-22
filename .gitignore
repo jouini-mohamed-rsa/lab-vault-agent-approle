@@ -1,11 +1,5 @@
-**/*.auto.tf*
-!**/cloud-envs/*.auto.tfvars
-**/.terraform*
-**/terraform.tfstate.*
 **/.vscode*
 **/package-lock.json
-**/vault.hclic
-**/*/__pycache__
 .venv
 .DS_Store
 lab.code-workspace
@@ -45,6 +39,4 @@ __pycache__/
 # Node modules (if any)
 node_modules/
 # Environment files with secrets
-.env
-.env.local
-.env.production
+.env.*

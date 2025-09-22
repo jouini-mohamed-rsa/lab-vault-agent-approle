@@ -45,24 +45,6 @@ debug_vms() {
     done
 }
 
-recover_vms() {
-    log "Attempting to recover VMs in unknown state..."
-    
-    for vm in vault-ansible vault-server vault-agent; do
-        if multipass list | grep -q "^$vm.*Unknown"; then
-            log "Recovering $vm..."
-            multipass stop $vm 2>/dev/null || true
-            sleep 5
-            multipass start $vm 2>/dev/null || {
-                log "Failed to recover $vm, deleting..."
-                multipass delete $vm --purge 2>/dev/null || true
-            }
-        fi
-    done
-    
-    log "Recovery completed"
-}
-
 # Main execution
 case "${1:-status}" in
     "status")
@@ -71,11 +53,8 @@ case "${1:-status}" in
     "debug")
         debug_vms
         ;;
-    "recover")
-        recover_vms
-        ;;
     *)
-        echo "Usage: $0 [status|debug|recover]"
+        echo "Usage: $0 [status|debug]"
         exit 1
         ;;
 esac

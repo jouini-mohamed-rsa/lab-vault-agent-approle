@@ -14,10 +14,20 @@
         path: "sys/policies/acl/{{ app_name }}-policy"
         data:
           policy: |        
-            # KV v2 secrets
+            # KV v2 secrets - allow reading the secret root and subkeys
+            path "kv/data/{{ app_name }}" {
+              capabilities = ["read"]
+            }
             path "kv/data/{{ app_name }}/*" {
               capabilities = ["read"]
-            }    
+            }
+            # KV v2 metadata (needed by some clients/templates)
+            path "kv/metadata/{{ app_name }}" {
+              capabilities = ["read"]
+            }
+            path "kv/metadata/{{ app_name }}/*" {
+              capabilities = ["read"]
+            }
             # Allow token renewal
             path "auth/token/renew-self" {
               capabilities = ["update"]
