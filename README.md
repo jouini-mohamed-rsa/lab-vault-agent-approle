@@ -360,65 +360,6 @@ multipass exec vault-agent -- bash -c '
 multipass exec vault-ansible -- cat /tmp/secret-id-monitor.log
 ```
 
-#### Manual Secret ID Health Check Script
-Create a health check script on the Ansible VM:
-```bash
-multipass exec vault-ansible -- bash -c '
-cat > /home/ubuntu/check-secret-health.sh << "EOF"
-#!/bin/bash
-
-echo "=== Secret ID Health Check ==="
-source /home/ubuntu/ansible/.ansible.env
-
-# Check AppRole configuration
-echo "1. AppRole Configuration:"
-vault read auth/approle/role/dummy-app
-
-# Check current Secret ID TTL
-echo -e "\n2. Current Secret ID TTL:"
-SECRET_ID_INFO=$(vault write -format=json auth/approle/role/dummy-app/secret-id metadata={})
-echo "$SECRET_ID_INFO" | jq ".data.secret_id_ttl"
-
-# Check Secret ID usage
-echo -e "\n3. Secret ID Usage:"
-echo "$SECRET_ID_INFO" | jq ".data.secret_id_num_uses"
-
-# List all Secret ID accessors
-echo -e "\n4. Active Secret ID Accessors:"
-vault list auth/approle/role/dummy-app/secret-id
-
-# Check agent authentication
-echo -e "\n5. Test Agent Authentication:"
-ROLE_ID=$(vault read -field=role_id auth/approle/role/dummy-app/role-id)
-AGENT_SECRET_ID=$(multipass exec vault-agent -- sudo cat /opt/vault-agent/secret-id 2>/dev/null || echo "NOT_FOUND")
-
-if [[ "$AGENT_SECRET_ID" != "NOT_FOUND" ]]; then
-    if vault write auth/approle/login role_id="$ROLE_ID" secret_id="$AGENT_SECRET_ID" >/dev/null 2>&1; then
-        echo "✅ Agent authentication successful"
-    else
-        echo "❌ Agent authentication failed"
-    fi
-else
-    echo "❌ Secret ID file not found on agent"
-fi
-
-# Check KV secret access
-echo -e "\n6. KV Secret Access Test:"
-if vault kv get kv/dummy-app >/dev/null 2>&1; then
-    echo "✅ KV secrets accessible"
-else
-    echo "❌ KV secrets not accessible"
-fi
-
-echo -e "\n=== Health Check Complete ==="
-EOF
-
-chmod +x /home/ubuntu/check-secret-health.sh
-'
-
-# Run the health check
-multipass exec vault-ansible -- /home/ubuntu/check-secret-health.sh
-```
 
 #### Set Up Monitoring Cron Job
 Installed automatically during `task vault-agent`. To re-install or inspect:
