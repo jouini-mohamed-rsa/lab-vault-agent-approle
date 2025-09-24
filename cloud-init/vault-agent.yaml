@@ -3,6 +3,7 @@ packages:
   - curl
   - unzip
   - python3
+  - jq
 
 runcmd:
   - |
@@ -24,6 +25,6 @@ runcmd:
   - sudo mkdir -p /opt/vault-agent/bin
   - sudo mkdir -p /opt/vault-agent/backups
   - sudo mkdir -p /var/log/vault-agent
-  - sudo mkdir -p /var/log/dummy-app
+  - sudo mkdir -p /var/log/bf-app
   - sudo mkdir -p /opt/vault/certs
-  - sudo chown -R vault-agent:vault-agent /opt/vault-agent /var/log/vault-agent /var/log/dummy-app
+  - sudo chown -R vault-agent:vault-agent /opt/vault-agent /var/log/vault-agent /var/log/bf-app

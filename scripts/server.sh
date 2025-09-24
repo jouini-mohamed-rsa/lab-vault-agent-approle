@@ -60,8 +60,8 @@ initialize_vault() {
     ")
     
     # Extract credentials
-    UNSEAL_KEY=$(echo "$INIT_OUTPUT" | python3 -c "import sys,json;print(json.load(sys.stdin)['unseal_keys_b64'][0])")
-    ROOT_TOKEN=$(echo "$INIT_OUTPUT" | python3 -c "import sys,json;print(json.load(sys.stdin)['root_token'])")
+    UNSEAL_KEY=$(echo "$INIT_OUTPUT" | jq -r '.unseal_keys_b64[0]')
+    ROOT_TOKEN=$(echo "$INIT_OUTPUT" | jq -r '.root_token')
     
     # Save credentials
     echo "$UNSEAL_KEY" > unseal-key.txt
@@ -74,6 +74,12 @@ initialize_vault() {
         export VAULT_CACERT=/opt/vault/certs/ca-cert.pem
         vault operator unseal $UNSEAL_KEY >/dev/null
     "
+    multipass exec $VAULT_VM  -- bash -c "
+        echo 'export VAULT_TOKEN=$ROOT_TOKEN' >> ~/.bashrc
+        echo 'export VAULT_TOKEN=$ROOT_TOKEN' | sudo tee -a /etc/environment >/dev/null
+
+    " 2>/dev/null
+
     multipass exec $VAULT_VM -- bash -c "
         export VAULT_ADDR=https://localhost:8200
         export VAULT_CACERT=/opt/vault/certs/ca-cert.pem

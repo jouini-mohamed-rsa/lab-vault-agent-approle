@@ -1,27 +1,16 @@
 version: '3'
 
-includes:
-  init: ./tasks/init.yml
-  server: ./tasks/server.yml
-  ansible: ./tasks/ansible.yml
-  agent: ./tasks/agent.yml
-
 vars:
   ANSIBLE_VM: vault-ansible
   VAULT_VM: vault-server
   AGENT_VM: vault-agent
 
 tasks:
-  default:
-    desc: Show available tasks
-    cmds:
-      - task --list-all
-
   # Main workflow tasks
   infrastructure:
     desc: Initialize infrastructure (VMs, certs, networking)
     cmds:
-      - task: init:all
+      - ./scripts/init.sh all
     silent: true
 
   vault-server:
@@ -32,7 +21,7 @@ tasks:
           echo "[ERROR] Infrastructure not ready. Run 'task infrastructure' first."
           exit 1
         fi
-      - task: server:all
+      - ./scripts/server.sh all
     silent: true
 
   vault-ansible:
@@ -43,7 +32,7 @@ tasks:
           echo "[ERROR] Vault server not ready. Run 'task vault-server' first."
           exit 1
         fi
-      - task: ansible:all
+      - ./scripts/ansible.sh all
     silent: true
 
   vault-agent:
@@ -54,7 +43,7 @@ tasks:
           echo "[ERROR] Ansible not ready. Run 'task vault-ansible' first."
           exit 1
         fi
-      - task: agent:all
+      - ./scripts/agent.sh all
     silent: true
 
   secrets:

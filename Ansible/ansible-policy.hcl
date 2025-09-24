@@ -1,5 +1,10 @@
 # Allow Ansible to manage AppRole policies and secrets
 path "auth/approle/*" {
+  capabilities = ["create", "read", "update", "delete", "list", "sudo"]
+}
+
+# Explicitly allow reading AppRole configurations
+path "auth/approle/role/*" {
   capabilities = ["create", "read", "update", "delete", "list"]
 }
 

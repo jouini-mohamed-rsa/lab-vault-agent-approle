@@ -4,11 +4,16 @@
 vault_url: "https://{{VAULT_IP}}:8200"
 vault_admin_token: "{{ROOT_TOKEN}}"
 
+# AppRole Authentication for Ansible (operational tasks)
+ansible_role_id_file: "/home/ubuntu/ansible/credentials/role-id"
+ansible_secret_id_file: "/home/ubuntu/ansible/credentials/secret-id"
+
 # Application Configuration
-app_name: "dummy-app"
-token_ttl: "30m"
-token_max_ttl: "1h"
-secret_id_ttl: "2h"
+app_name: "bf-app"
+token_ttl: "5m"
+token_max_ttl: "20m"
+secret_id_ttl: "1h"
+secret_id_num_uses: 0  # 0 = unlimited uses
 wrap_ttl: "5m"
 
 # Lab-specific settings
@@ -33,6 +38,5 @@ demo_secrets:
     secret: "demo_api_secret_67890"
 
 # Secret ID Monitoring Configuration
-monitor_interval: "30m"
-secret_id_renewal_threshold: 300  # seconds
+secret_id_renewal_threshold: 1800  # seconds (30 minutes - before expiration)
 max_uses_threshold: 0

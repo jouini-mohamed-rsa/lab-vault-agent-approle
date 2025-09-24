@@ -9,7 +9,6 @@ lab/
 ├── Taskfile.yml              # Main task orchestration
 ├── tasks/                    # Modular task definitions
 │   ├── init.yml             # Infrastructure tasks
-│   ├── server.yml           # Vault server tasks
 │   ├── ansible.yml          # Ansible configuration tasks
 │   └── agent.yml            # Vault agent tasks
 ├── scripts/                 # Shell script implementations
@@ -30,13 +29,9 @@ lab/
 │   └── vault-san.conf.template     # Certificate SAN config
 ├── Ansible/                 # Ansible playbooks and configuration
 │   ├── AppRoleConfig.yaml          # AppRole configuration
-│   ├── RoleIDDistribution.yaml     # Role ID deployment
-│   ├── SecretIDGen.yaml            # Secret ID generation
 │   ├── SecretIDMonitor.yaml        # Automated monitoring
 │   └── lab-vars.yml                # Centralized variables
 ├── cloud-init/             # VM initialization scripts
-├── apps/                   # Sample applications
-│   └── dummy-app.py        # Demo application
 └── generated/              # Generated files (runtime)
     ├── certs/              # TLS certificates
     ├── config/             # Generated configurations
@@ -196,7 +191,7 @@ After successful deployment:
 ### Vault Configuration
 - **UI**: https://vault-server-ip:8200
 - **TLS**: Full certificate chain with proper SANs
-- **Authentication**: AppRole method enabled for `dummy-app`
+- **Authentication**: AppRole method enabled for `bf-app`
 - **Secrets Engine**: KV v2 enabled with demo secrets
 - **Policies**: Agent policy for secret access
 
@@ -246,6 +241,57 @@ multipass list
 multipass info vault-server vault-ansible vault-agent
 ```
 
+### Simple CLI Troubleshooting
+```bash
+# Connect to ansible machine and get all info
+multipass exec vault-ansible -- bash -c '
+cd /home/ubuntu/ansible && source .ansible.env
+echo "=== Ansible Authentication ==="
+ROLE_ID=$(cat credentials/role-id)
+SECRET_ID=$(cat credentials/secret-id)
+VAULT_TOKEN=$(vault write -field=token auth/approle/login role_id="$ROLE_ID" secret_id="$SECRET_ID")
+export VAULT_TOKEN
+echo "✅ Authenticated as Ansible"
+
+echo -e "\n=== Dummy App Role ID ==="
+vault read -field=role_id auth/approle/role/bf-app/role-id
+
+echo -e "\n=== Dummy App Secret ID Info ==="
+vault read auth/approle/role/bf-app
+
+echo -e "\n=== KV Dummy Info ==="
+vault kv get kv/bf-app
+'
+
+# Check cron monitoring logs
+multipass exec vault-ansible -- bash -c '
+echo "=== Cron Job Status ==="
+crontab -l | grep SecretIDMonitor
+
+echo -e "\n=== Last Cron Execution ==="
+sudo grep "SecretIDMonitor" /var/log/syslog | tail -3
+
+echo -e "\n=== Monitoring Logs ==="
+if [[ -f /tmp/secret-id-monitor.log ]]; then
+    tail -50 /tmp/secret-id-monitor.log
+else
+    echo "Log file not found. Running monitoring manually..."
+    cd /home/ubuntu/ansible && source .ansible.env && ansible-playbook SecretIDMonitor.yaml
+fi
+'
+
+# Check last cron job execution times
+multipass exec vault-ansible -- bash -c '
+echo "=== Recent Cron Job Executions ==="
+echo "Last 5 SecretIDMonitor cron executions:"
+sudo grep "SecretIDMonitor" /var/log/syslog | awk "{print \$1, \$2, \$3}" | tail -5
+
+echo -e "\n=== General Cron Activity ==="
+echo "Last 10 cron executions (all jobs):"
+sudo grep "CRON.*CMD" /var/log/syslog | tail -10 | awk "{print \$1, \$2, \$3, \$6, \$7, \$8}"
+'
+```
+
 ### TTL and Expiration Monitoring
 
 #### Check Token TTL
@@ -263,13 +309,13 @@ vault token lookup -format=json | jq '.data.renewable'
 #### Check Secret ID TTL and Usage
 ```bash
 # From Ansible VM (with AppRole token)
-vault write auth/approle/role/dummy-app/secret-id/lookup secret_id="YOUR_SECRET_ID"
+vault write auth/approle/role/bf-app/secret-id/lookup secret_id="YOUR_SECRET_ID"
 
 # Check Secret ID accessor information
-vault list auth/approle/role/dummy-app/secret-id
+vault list auth/approle/role/bf-app/secret-id
 
 # Get specific Secret ID details
-vault write auth/approle/role/dummy-app/secret-id/accessor/lookup secret_id_accessor="ACCESSOR_ID"
+vault write auth/approle/role/bf-app/secret-id/accessor/lookup secret_id_accessor="ACCESSOR_ID"
 ```
 
 #### Check KV Secret Versions and Metadata
@@ -278,13 +324,13 @@ vault write auth/approle/role/dummy-app/secret-id/accessor/lookup secret_id_acce
 vault kv list kv/
 
 # Get secret metadata (including version info)
-vault kv metadata kv/dummy-app
+vault kv metadata kv/bf-app
 
 # Get specific version
-vault kv get -version=1 kv/dummy-app
+vault kv get -version=1 kv/bf-app
 
 # Check secret history
-vault kv metadata kv/dummy-app -format=json | jq '.data.versions'
+vault kv metadata kv/bf-app -format=json | jq '.data.versions'
 ```
 
 ### Agent Token and Secret Expiration Checks
@@ -327,7 +373,7 @@ multipass exec vault-agent -- bash -c '
 ```bash
 # From any VM with VAULT environment
 SECRET_ID=$(multipass exec vault-agent -- sudo cat /opt/vault-agent/secret-id)
-ROLE_ID=$(vault read -field=role_id auth/approle/role/dummy-app/role-id)
+ROLE_ID=$(vault read -field=role_id auth/approle/role/bf-app/role-id)
 
 # Test authentication
 vault write auth/approle/login role_id="$ROLE_ID" secret_id="$SECRET_ID"
@@ -373,7 +419,7 @@ multipass exec vault-ansible -- crontab -l | sed -n '/SecretIDMonitor.yaml/p'
 ./scripts/ansible-playbooks.sh monitor
 
 # Force regeneration
-./scripts/ansible-playbooks.sh secret-id
+# Secret ID generation is now handled automatically by the monitoring system
 
 # Check agent logs
 multipass exec vault-agent -- sudo journalctl -u vault-agent -f
@@ -399,7 +445,7 @@ multipass exec vault-agent -- sudo journalctl -u vault-agent -f
 - **Credentials**: `generated/ansible-auth/`
 - **Certificates**: `generated/certs/`
 - **Vault Agent logs**: `/opt/vault-agent/logs/` on agent VM
-- **Application logs**: `/opt/vault-agent/logs/dummy-app.log`
+- **Application logs**: `/opt/vault-agent/logs/bf-app.log`
 
 ## Development
 

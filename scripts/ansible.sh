@@ -37,7 +37,8 @@ prepare_ansible_auth() {
             token_policies=\"ansible-policy\" \
             token_ttl=1h \
             token_max_ttl=4h \
-            secret_id_ttl=24h >/dev/null
+            secret_id_ttl=0 \
+            secret_id_num_uses=0 >/dev/null
         
         # Get credentials
         ROLE_ID=\$(vault read -field=role_id auth/approle/role/ansible-role/role-id)
@@ -88,7 +89,7 @@ create_ansible_inventory() {
     # Generate files
     sed -e "s/{{VAULT_IP}}/$VAULT_IP/g" \
         -e "s/{{AGENT_IP}}/$AGENT_IP/g" \
-        -e "s/{{AGENT_VM}}/vault-agent/g" \
+        -e "s/{{AGENT_VM}}/$AGENT_VM/g" \
         Ansible/hosts.template > generated/inventory/hosts
     
     sed "s/{{VAULT_IP}}/$VAULT_IP/g" Ansible/group_vars > generated/inventory/group_vars

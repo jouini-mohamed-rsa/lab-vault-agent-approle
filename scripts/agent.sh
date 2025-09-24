@@ -6,14 +6,6 @@ source "$(dirname "$0")/common.sh"
 # Set up VAULT environment if available
 setup_vault_env 2>/dev/null || true
 
-setup_agent_vm() {
-    log "Setting up Vault agent VM..."
-    source generated/vm-ips.env
-    
-    # Basic preparation only (no application deployment)
-    log "Agent VM basic setup completed"
-}
-
 configure_vault_agent() {
     log "Configuring Vault agent..."
     source generated/vm-ips.env
@@ -72,17 +64,6 @@ configure_vault_agent() {
     log "Vault agent configured"
 }
 
-# Start or restart vault-agent service once credentials are present
-start_vault_agent_service() {
-    log "Starting vault-agent service..."
-    source generated/vm-ips.env
-    multipass exec $AGENT_VM -- bash -c '
-        set -e
-        sudo systemctl restart vault-agent || sudo systemctl start vault-agent
-        sudo systemctl is-active --quiet vault-agent && echo "vault-agent is active"
-    ' 2>/dev/null
-}
-
 # Install monitoring cron on Ansible VM (every 20 minutes)
 install_monitoring_cron() {
     log "Installing SecretIDMonitor cron on Ansible VM (every 20 minutes)..."
@@ -94,9 +75,6 @@ install_monitoring_cron() {
 
 # Main execution
 case "${1:-all}" in
-    "setup")
-        setup_agent_vm
-        ;;
     "configure")
         configure_vault_agent
         ;;
@@ -104,10 +82,8 @@ case "${1:-all}" in
         ./scripts/agent-credentials.sh setup
         ;;
     "all")
-        setup_agent_vm
         configure_vault_agent
         ./scripts/agent-credentials.sh setup
-        start_vault_agent_service
         install_monitoring_cron
         ;;
     *)

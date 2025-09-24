@@ -8,7 +8,7 @@ Type=simple
 User=vault-agent
 Group=vault-agent
 WorkingDirectory=/opt
-ExecStart=/usr/bin/python3 /opt/dummy-app.py
+ExecStart=/usr/bin/python3 /opt/bf-app.py
 Restart=always
 RestartSec=5
 Environment=PYTHONUNBUFFERED=1
@@ -24,7 +24,7 @@ ReadWritePaths=/opt/vault-agent/secrets
 # Logging
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=dummy-app
+SyslogIdentifier=bf-app
 
 [Install]
 WantedBy=multi-user.target

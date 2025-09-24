@@ -22,7 +22,7 @@ create_demo_secrets() {
         export VAULT_TOKEN=$ROOT_TOKEN
         
         # Create dummy application secrets (matching secret.tmpl structure)
-        vault kv put kv/dummy-app \
+        vault kv put kv/bf-app \
             db_username=\"demo_user\" \
             db_password=\"demo_password123\" \
             db_host=\"localhost\" \
@@ -33,45 +33,10 @@ create_demo_secrets() {
         echo 'Demo secrets created successfully'
     " 2>/dev/null
     
-    log "Demo secrets created at kv/dummy-app"
+    log "Demo secrets created at kv/bf-app"
     log "Secrets match the structure defined in Agent/secret.tmpl:"
     log "  - database: username, password, host, port"
     log "  - api: key, secret"
-}
-
-create_agent_policy() {
-    log "Creating policy for Vault agent..."
-    source generated/vm-ips.env
-    ROOT_TOKEN=$(cat root-token.txt)
-    
-    # Create agent policy
-    multipass exec $VAULT_VM -- bash -c "
-        export VAULT_ADDR=https://localhost:8200
-        export VAULT_CACERT=/opt/vault/certs/ca-cert.pem
-        export VAULT_TOKEN=$ROOT_TOKEN
-        
-        # Create policy for agent to read dummy app secrets
-        vault policy write agent-policy - <<EOF
-# Allow agent to read dummy app secrets
-path \"kv/data/dummy-app\" {
-  capabilities = [\"read\"]
-}
-
-# Allow agent to read its own token info
-path \"auth/token/lookup-self\" {
-  capabilities = [\"read\"]
-}
-
-# Allow agent to renew its token
-path \"auth/token/renew-self\" {
-  capabilities = [\"update\"]
-}
-EOF
-        
-        echo 'Agent policy created successfully'
-    " 2>/dev/null
-    
-    log "Agent policy created with permissions for kv/dummy-app"
 }
 
 verify_secrets() {
@@ -85,8 +50,8 @@ verify_secrets() {
         export VAULT_CACERT=/opt/vault/certs/ca-cert.pem
         export VAULT_TOKEN=$ROOT_TOKEN
         
-        echo 'Verifying secrets at kv/dummy-app:'
-        vault kv get kv/dummy-app
+        echo 'Verifying secrets at kv/bf-app:'
+        vault kv get kv/bf-app
     " 2>/dev/null
 }
 
@@ -95,14 +60,10 @@ case "${1:-secrets}" in
     "create"|"secrets")
         create_demo_secrets
         ;;
-    "policy")
-        create_agent_policy
-        ;;
     "verify")
         verify_secrets
         ;;
     "all")
-        create_agent_policy
         create_demo_secrets
         verify_secrets
         ;;

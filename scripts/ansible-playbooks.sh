@@ -69,14 +69,6 @@ case "${1:-help}" in
         prepare_ansible_vars
         run_playbook "AppRoleConfig.yaml"
         ;;
-    "secret-id")
-        prepare_ansible_vars
-        run_playbook "SecretIDGen.yaml"
-        ;;
-    "role-id")
-        prepare_ansible_vars
-        run_playbook "RoleIDDistribution.yaml"
-        ;;
     "monitor")
         prepare_ansible_vars
         run_playbook "SecretIDMonitor.yaml"
@@ -88,7 +80,9 @@ case "${1:-help}" in
         multipass exec $ANSIBLE_VM -- bash -c '
             set -euo pipefail
             cd /home/ubuntu/ansible
-            
+            sudo mkdir -p /var/log/ansible
+            sudo chown ubuntu:ubuntu /var/log/ansible
+            sudo chmod 755 /var/log/ansible
             # Ensure env file exists for Vault context when playbook runs
             if [[ -f .ansible.env ]]; then
               ENV_SOURCE="source /home/ubuntu/ansible/.ansible.env && "
@@ -103,7 +97,7 @@ case "${1:-help}" in
             crontab -l 2>/dev/null > "$TEMP_CRON" || touch "$TEMP_CRON"
             
             # Create the cron job line
-            CRON_LINE="*/20 * * * * ${ENV_SOURCE}cd /home/ubuntu/ansible && ansible-playbook SecretIDMonitor.yaml >> /tmp/secret-id-monitor.log 2>&1"
+            CRON_LINE="*/10 * * * * ${ENV_SOURCE}cd /home/ubuntu/ansible && ansible-playbook SecretIDMonitor.yaml >> /var/log/ansible/secret-id-monitor.log 2>&1"
             
             # Check if this cron job already exists
             if ! grep -q "SecretIDMonitor.yaml" "$TEMP_CRON" 2>/dev/null; then
@@ -128,11 +122,9 @@ case "${1:-help}" in
     "all")
         prepare_ansible_vars
         run_playbook "AppRoleConfig.yaml"
-        run_playbook "RoleIDDistribution.yaml"
-        run_playbook "SecretIDGen.yaml"
         ;;
     *)
-        echo "Usage: $0 [vars|run <playbook>|approle|secret-id|role-id|monitor|install-monitor-cron|all]"
+        echo "Usage: $0 [vars|run <playbook>|approle|role-id|monitor|install-monitor-cron|all]"
         echo ""
         echo "Available playbooks:"
         ls Ansible/*.yaml 2>/dev/null | xargs -n1 basename || echo "No playbooks found"

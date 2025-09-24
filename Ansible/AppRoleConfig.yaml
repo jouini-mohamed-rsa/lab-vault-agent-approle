@@ -1,16 +1,37 @@
 ---
 - name: "Configure AppRole in Vault"
   hosts: localhost
-  gather_facts: no
+  gather_facts: yes
   vars_files:
     - lab-vars.yml
 
   tasks:
+    - name: "Read Ansible AppRole credentials"
+      set_fact:
+        ansible_role_id: "{{ lookup('file', ansible_role_id_file) }}"
+        ansible_secret_id: "{{ lookup('file', ansible_secret_id_file) }}"
+      no_log: true
+
+    - name: "Authenticate with Ansible AppRole"
+      uri:
+        url: "{{ vault_url }}/v1/auth/approle/login"
+        method: POST
+        headers:
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          role_id: "{{ ansible_role_id }}"
+          secret_id: "{{ ansible_secret_id }}"
+        validate_certs: yes
+        ca_path: "{{ vault_cacert_path }}"
+      register: ansible_auth_result
+      no_log: true
+
     - name: "Create application policy"
       community.hashi_vault.vault_write:
         url: "{{ vault_url }}"
         auth_method: token
-        token: "{{ vault_admin_token }}"
+        token: "{{ ansible_auth_result.json.auth.client_token }}"
         path: "sys/policies/acl/{{ app_name }}-policy"
         data:
           policy: |        
@@ -49,14 +70,14 @@
       community.hashi_vault.vault_write:
         url: "{{ vault_url }}"
         auth_method: token
-        token: "{{ vault_admin_token }}"
+        token: "{{ ansible_auth_result.json.auth.client_token }}"
         path: "auth/approle/role/{{ app_name }}"
         data:
           token_policies: "{{ app_name }}-policy"
           token_ttl: "{{ token_ttl }}"
           token_max_ttl: "{{ token_max_ttl }}"
           secret_id_ttl: "{{ secret_id_ttl }}"
-          secret_id_num_uses: 1
+          secret_id_num_uses: "{{ secret_id_num_uses }}"
       register: approle_config_result
 
     - name: "Display result - AppRole configured"
@@ -65,3 +86,88 @@
       when: 
         - approle_config_result is defined
         - approle_config_result.changed
+
+    # Deploy Role ID to Vault Agent hosts
+    - name: "Get Role ID for '{{ app_name }}'"
+      community.hashi_vault.vault_read:
+        url: "{{ vault_url }}"
+        auth_method: token
+        token: "{{ ansible_auth_result.json.auth.client_token }}"
+        path: "auth/approle/role/{{ app_name }}/role-id"
+      register: role_id_result
+
+    - name: "Deploy Role ID to agent host"
+      copy:
+        content: "{{ role_id_result.data.data.role_id }}"
+        dest: "/opt/vault-agent/role-id"
+        mode: '0600'
+        owner: vault-agent
+        group: vault-agent
+      delegate_to: "{{ item }}"
+      loop: "{{ groups['vault_agents'] | default(['vault-agent']) }}"
+      become: yes
+
+    - name: "Display result - Role ID deployed"
+      debug:
+        msg: "✅ Role ID has been deployed to agent host(s)"
+
+    # Generate and deploy wrapped Secret ID, then restart agent
+    - name: "Generate wrapped Secret ID"
+      uri:
+        url: "{{ vault_url }}/v1/auth/approle/role/{{ app_name }}/secret-id"
+        method: POST
+        headers:
+          X-Vault-Token: "{{ ansible_auth_result.json.auth.client_token }}"
+          X-Vault-Wrap-TTL: "{{ wrap_ttl }}"
+        body_format: json
+        body: {}
+        validate_certs: yes
+        ca_path: "{{ vault_cacert_path }}"
+      register: new_wrapped_secret
+      no_log: true
+
+    - name: "Deploy new wrapped Secret ID to agent hosts"
+      copy:
+        content: "{{ new_wrapped_secret.json.wrap_info.token }}"
+        dest: "/opt/vault-agent/secret-id"
+        mode: '0600'
+        owner: vault-agent
+        group: vault-agent
+      delegate_to: "{{ item }}"
+      loop: "{{ groups['vault_agents'] | default(['vault-agent']) }}"
+      become: yes
+
+    - name: "Restart vault-agent service to use new Secret ID"
+      systemd:
+        name: vault-agent
+        state: restarted
+      delegate_to: "{{ item }}"
+      loop: "{{ groups['vault_agents'] | default(['vault-agent']) }}"
+      become: yes
+
+    - name: "Log monitoring action"
+      copy:
+        content: |
+          # AppRole Configuration and Credential Deployment Log
+          Timestamp: {{ ansible_date_time.iso8601 }}
+          App Name: {{ app_name }}
+          Role ID Deployed: {{ role_id_result.json.data.role_id | default('unknown') }}
+          Wrapped Secret Issued: {{ new_wrapped_secret.json.wrap_info.creation_time | default('N/A') }}
+          Wrapped Token: {{ new_wrapped_secret.json.wrap_info.token | default('N/A') }}
+          Wrap TTL: {{ new_wrapped_secret.json.wrap_info.ttl | default('N/A') }}
+          Action: Generated and deployed wrapped Secret ID; restarted agent
+          ---
+        dest: "/var/log/vault-agent/secret-id-monitor.log"  # ✅ Better path
+        mode: '0644'
+      delegate_to: localhost
+
+
+    - name: "Display monitoring completion"
+      debug:
+        msg:
+          - "🎯 AppRole setup and credential deployment complete!"
+          - ""
+          - "Results:"
+          - "  - Role ID deployed to agent"
+          - "  - New wrapped Secret ID generated and deployed"
+          - "  - Agent restarted to pick up new credentials"
